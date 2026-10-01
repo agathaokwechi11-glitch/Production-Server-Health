@@ -28,7 +28,7 @@ show_server_status(){
 }
 
 show_disk_usage(){
-    
+    df -h 
 }
 
 
