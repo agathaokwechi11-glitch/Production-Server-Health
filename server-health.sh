@@ -1,4 +1,10 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash 
+set -euo pipefail
+
+SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")"  && pwd )"
+CONFIG_FILE="$SCRIPT_DIR/config/health.conf"
+
+source "$CONFIG_FILE"
 
 show_server_status(){
     local hostname
@@ -10,8 +16,6 @@ show_server_status(){
     local uptime
     local cpu_count
     local load_average
-
-
 
     hostname=$(hostname)
     operating_system=$(uname)
@@ -34,7 +38,7 @@ show_server_status(){
             ;;
         MING*|MSYS*|CYGWIN*) 
             uptime="Environment: Windows / Bash"
-            ip_address=$(ipconfig | grep -m 1 "IPv4 Address" | awk -F: '{print $2})
+            ip_address=$(ipconfig | grep -m 1 "IPv4 Address" | awk -F: '{print $2}')
             ;;
         *) 
             uptime="Uptime not supported"
@@ -56,49 +60,4 @@ show_server_status(){
     echo
 }
 
-show_disk_usage(){
-    df -h 
-}
-
-
-
-
-
-usage(){
-    echo "Usage: $0 <command>"
-    echo "Commands includes:"
-    echo "status"
-    echo "disk"
-    echo "memory"
-    echo "cpu"
-    echo "processes"
-    echo "users"
-    echo "logs"
-    echo "all"
-}
-
-main (){
-    if [[  "$#" -ne 1 ]] ; then
-        usage
-        return 1
-    fi
-
-    case "$1" in 
-        status) 
-            show_server_status 
-            ;;
-        disk) show_disk_usage ;;
-        memory) show_memory_usage;;
-        cpu) show_cpu_usage;;
-        processes) show_processes;;
-        users) show_users;;
-        logs) show_logs;;
-        all) all;;
-        *)  echo "Error: Unknown command $1">&2
-            echo " Run $0 for usage">&2
-            return 1;;
-    esac
-
-}   
-
-main "$@"
+show_server_status
