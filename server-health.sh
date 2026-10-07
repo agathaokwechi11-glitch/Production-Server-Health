@@ -60,4 +60,77 @@ show_server_status(){
     echo
 }
 
-show_server_status
+get_cpu_stats(){
+    local user
+    local nice
+    local system
+    local idle
+    local cpu
+
+    read -r cpu user nice system idle < <( grep '^cpu ' /proc/stat )
+    echo "$user $nice $system $idle"
+}
+
+
+get_cpu_usage(){
+    local user1
+    local nice1
+    local system1
+    local idle1
+
+    local user2
+    local nice2
+    local system2
+    local idle2
+
+    local total1
+    local total2
+    local total_difference
+    local idle_difference
+    local busy
+    local usage
+
+    local cpu1
+    local cpu2
+
+    cpu1=$(get_cpu_stats)
+
+    read -r user1 nice1 system1 idle1 <<< "$cpu1"
+
+    sleep 1
+
+    cpu2=$(get_cpu_stats)
+
+    read -r user2 nice2 system2 idle2 <<< "$cpu2"
+
+    total1=$((user1 + nice1 + system1 + idle1))
+    total2=$((user2 + nice2 + system2 + idle2))
+
+    total_difference=$((total2 - total1))
+    idle_difference=$((idle2 - idle1))
+    busy=$((total_difference - idle_difference))
+    usage=$((busy * 100 / total_difference))
+    echo "$usage"
+}
+
+
+
+get_cpu_status(){
+    local usage
+
+    usage="$1"
+
+    if (( "$usage" < "$CPU_WARNING" )); then
+        echo "OK"
+    elif (( "$usage" <= "$CPU_CRITICAL" )); then
+        echo "WARNING"
+    else
+        echo "CRITICAL"
+    fi
+}
+
+cpu_usage=$(get_cpu_usage)
+cpu_status=$(get_cpu_status "$cpu_usage")
+
+echo "Cpu Usage: $cpu_usage%"
+echo "Cpu Status: $cpu_status"
