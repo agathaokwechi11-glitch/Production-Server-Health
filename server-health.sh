@@ -134,3 +134,40 @@ cpu_status=$(get_cpu_status "$cpu_usage")
 
 echo "Cpu Usage: $cpu_usage%"
 echo "Cpu Status: $cpu_status"
+
+get_memory_usage(){
+    local total_memory
+    local available_memory
+    local used_memory
+    local usage
+
+    total_memory=$( awk '/^MemTotal:/ {print $2}' /proc/meminfo )
+    available_memory=$( awk '/^MemAvailable:/ {print $2}' /proc/meminfo )
+    used_memory=$(( total_memory - available_memory ))
+    echo "$available_memory"
+
+    usage=$((used_memory * 100 / total_memory ))
+    
+     echo "$usage"  
+   
+   
+}
+
+get_memory_status(){
+       local  usage="$1"
+
+    if (( usage < MEMORY_WARNING ));then
+        echo "OK"
+    elif (( usage < MEMORY_CRITICAL ));then
+        echo "WARNING"
+    else 
+        echo "CRITICAL"
+    fi
+}
+
+memory_usage=$(get_memory_usage)
+memory_status=$(get_memory_status "$memory_usage")
+
+echo "Memory Usage: $memory_usage"
+echo "Memory Status: $memory_status"
+
