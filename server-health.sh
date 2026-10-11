@@ -67,7 +67,8 @@ get_cpu_stats(){
     local idle
     local cpu
 
-    read -r cpu user nice system idle < <( grep '^cpu ' /proc/stat )
+    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice \
+    < <(grep '^cpu ' /proc/stat)
     echo "$user $nice $system $idle"
 }
 
@@ -129,11 +130,6 @@ get_cpu_status(){
     fi
 }
 
-cpu_usage=$(get_cpu_usage)
-cpu_status=$(get_cpu_status "$cpu_usage")
-
-echo "Cpu Usage: $cpu_usage%"
-echo "Cpu Status: $cpu_status"
 
 get_memory_usage(){
     local total_memory
@@ -144,25 +140,22 @@ get_memory_usage(){
     total_memory=$( awk '/^MemTotal:/ {print $2}' /proc/meminfo )
     available_memory=$( awk '/^MemAvailable:/ {print $2}' /proc/meminfo )
     used_memory=$(( total_memory - available_memory ))
-    echo "$available_memory"
 
     usage=$((used_memory * 100 / total_memory ))
     
-     echo "$usage"  
-   
-   
+    echo "$usage"  
 }
 
 get_memory_status(){
-       local  usage="$1"
+        local  usage="$1"
 
-    if (( usage < MEMORY_WARNING ));then
-        echo "OK"
-    elif (( usage < MEMORY_CRITICAL ));then
-        echo "WARNING"
-    else 
-        echo "CRITICAL"
-    fi
+        if (( usage < MEMORY_WARNING ));then
+            echo "OK"
+        elif (( usage < MEMORY_CRITICAL ));then
+            echo "WARNING"
+        else 
+            echo "CRITICAL"
+        fi
 }
 
 memory_usage=$(get_memory_usage)
@@ -170,4 +163,6 @@ memory_status=$(get_memory_status "$memory_usage")
 
 echo "Memory Usage: $memory_usage"
 echo "Memory Status: $memory_status"
+
+
 
