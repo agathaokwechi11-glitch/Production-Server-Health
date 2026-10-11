@@ -66,7 +66,14 @@ get_cpu_stats(){
     local system
     local idle
     local cpu
+    local iowait
+    local irq
+    local softirq
+    local steal
+    local guest
+    local guest_nice
 
+   
     read -r cpu user nice system idle iowait irq softirq steal guest guest_nice \
     < <(grep '^cpu ' /proc/stat)
     echo "$user $nice $system $idle"
@@ -158,11 +165,45 @@ get_memory_status(){
         fi
 }
 
-memory_usage=$(get_memory_usage)
-memory_status=$(get_memory_status "$memory_usage")
 
-echo "Memory Usage: $memory_usage"
-echo "Memory Status: $memory_status"
+get_disk_status (){
+    local usage="$1"
+
+    if (( usage < DISK_WARNING )); then
+        echo "OK"
+    elif (( usage < DISK_CRITICAL )); then
+        echo "WARNING"
+    else
+        echo "CRITICAL"
+    fi
+
+}
+
+check_disk_usage(){
+    local filesystem
+    local usage
+    local status
+
+    while read -r filesystem usage; do
+    status=$(get_disk_status "$usage")
+    printf "%-20s %3s%% [%s]\n" "$filesystem" "$usage" "$status"
+    done  < <( 
+        #To get the filesystem and its usage without the percentage
+        df -P -x tmpfs -x  devtmpfs -x squashfs | 
+        awk '
+            NR > 1 {
+                usage = $5
+                    gsub("%",  "", usage)
+                    
+                    printf "%s %s\n" ,$6, usage
+            }
+        '
+    )
+    
+
+}
+
+check_disk_usage
 
 
 
