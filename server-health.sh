@@ -4,7 +4,17 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")"  && pwd )"
 CONFIG_FILE="$SCRIPT_DIR/config/health.conf"
 
-source "$CONFIG_FILE"
+#To handle configuration file errors and control exit codes for script termination
+if [[ ! -r "$CONFIG_FILE" ]];then
+    printf 'ERROR: Cannot read config file: %s\n'  "$CONFIG_FILE" >&2
+    exit 3
+fi
+
+if ! source "$CONFIG_FILE"; then
+    printf "ERROR; Failed to load config file\n" >&2
+    exit 3 
+fi
+
 
 show_server_status(){
     local hostname
@@ -128,9 +138,9 @@ get_cpu_status(){
 
     usage="$1"
 
-    if (( "$usage" < "$CPU_WARNING" )); then
+    if (( $usage < $CPU_WARNING )); then
         echo "OK"
-    elif (( "$usage" <= "$CPU_CRITICAL" )); then
+    elif (( $usage < $CPU_CRITICAL )); then
         echo "WARNING"
     else
         echo "CRITICAL"
@@ -182,10 +192,11 @@ get_disk_status (){
 check_disk_usage(){
     local filesystem
     local usage
-    local status
+    local disk_status
+    local disk_exit_code=0
 
     while read -r filesystem usage; do
-    status=$(get_disk_status "$usage")
+    disk_status=$(get_disk_status "$usage")
     printf "%-20s %3s%% [%s]\n" "$filesystem" "$usage" "$status"
     done  < <( 
         #To get the filesystem and its usage without the percentage
@@ -203,7 +214,9 @@ check_disk_usage(){
 
 }
 
-check_disk_usage
+show_health_report(){
+
+}
 
 
 
