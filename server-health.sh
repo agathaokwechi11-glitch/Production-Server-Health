@@ -197,7 +197,14 @@ check_disk_usage(){
 
     while read -r filesystem usage; do
     disk_status=$(get_disk_status "$usage")
-    printf "%-20s %3s%% [%s]\n" "$filesystem" "$usage" "$status"
+
+    if [[ "$disk_status" == "CRITICAL" ]];then
+        disk_exit_status=2
+    elif [[ "disk_status" == "WARNING" && disk_exit_code -lt 1 ]];then
+        disk_exit_status=1
+    fi
+
+    printf "%-20s %3s%% [%s]\n" "$filesystem" "$usage" "$disk_status"
     done  < <( 
         #To get the filesystem and its usage without the percentage
         df -P -x tmpfs -x  devtmpfs -x squashfs | 
@@ -211,11 +218,48 @@ check_disk_usage(){
         '
     )
     
-
+    return "$disk_exit_code"
 }
 
-show_health_report(){
 
+show_health_report(){
+    local cpu_usage
+    local cpu_status
+
+    local memory_status
+    local memory_usage
+
+    local disk_usage
+    local disk_status
+
+    local overall_status=HEALTHLY
+    local overall_exit_code=0
+
+    #------------------
+    # CPU
+    #------------------
+    cpu_usage=$( get_cpu_usage )
+    cpu_status=$( get_cpu_status "$cpu_usage" ) 
+
+    #------------------
+    # MEMORY
+    #__________________
+
+    memory_usage=$( get_memory_usage )
+    memory_status=$( get_memory_status "$memory_usage")
+
+    #-----------------------------
+    #DETRMINE MEMORY/CPU SERVERITY
+    #------------------------------
+    if [[ "$cpu_status" == "CRITICAL"  || "$memory_status" == "CRITICAL" ]];then
+        overall_status=CRITICAL
+        overall_exit_code=2
+    elif [[ "$cpu_status" == "WARNING"  || "$memory_status" == "WARNING"  && overall_exit_code -lt 2 ]];then
+        overall_status=WARNING
+        overall_exit_code=1
+    fi
+
+    
 }
 
 
