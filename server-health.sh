@@ -15,17 +15,10 @@ if ! source "$CONFIG_FILE"; then
     exit 3 
 fi
 
+    
 
-show_server_status(){
-    local hostname
-    local ip_address
-    local operating_system
-    local kernel
-    local date
-    local current_user
-    local uptime
-    local cpu_count
-    local load_average
+
+get_system_info(){
 
     hostname=$(hostname)
     operating_system=$(uname)
@@ -54,20 +47,6 @@ show_server_status(){
             uptime="Uptime not supported"
             ;;
     esac
-    echo 
-    echo "==============================================="
-    echo "                 SERVER STATUS                 "
-    echo "Hostname:                      $hostname"
-    echo "Operating System:              $operating_system"
-    echo "Kernel:                        $kernel"
-    echo "Uptime:                        $uptime"
-    echo "Current User:                  $current_user"
-    echo "Date:                          $date"
-    echo "IP Address:                    $ip_address"
-    echo "CPU Count:                     $cpu_count"
-    echo "Load Average:                  $load_average"
-    echo "==============================================="
-    echo
 }
 
 get_cpu_stats(){
@@ -138,9 +117,9 @@ get_cpu_status(){
 
     usage="$1"
 
-    if (( $usage < $CPU_WARNING )); then
+    if (( usage < CPU_WARNING )); then
         echo "OK"
-    elif (( $usage < $CPU_CRITICAL )); then
+    elif (( usage < CPU_CRITICAL )); then
         echo "WARNING"
     else
         echo "CRITICAL"
@@ -199,12 +178,12 @@ check_disk_usage(){
     disk_status=$(get_disk_status "$usage")
 
     if [[ "$disk_status" == "CRITICAL" ]];then
-        disk_exit_status=2
-    elif [[ "disk_status" == "WARNING" && disk_exit_code -lt 1 ]];then
-        disk_exit_status=1
+        disk_exit_code=2
+    elif [[ "$disk_status" == "WARNING" && disk_exit_code -lt 1 ]];then
+        disk_exit_code=1
     fi
 
-    printf "%-20s %3s%% [%s]\n" "$filesystem" "$usage" "$disk_status"
+    printf "%-40s %5s%% [%s]\n" "$filesystem" "$usage" "$disk_status"
     done  < <( 
         #To get the filesystem and its usage without the percentage
         df -P -x tmpfs -x  devtmpfs -x squashfs | 
@@ -229,8 +208,7 @@ show_health_report(){
     local memory_status
     local memory_usage
 
-    local disk_usage
-    local disk_status
+    local disk_exit_code
 
     local overall_status=HEALTHLY
     local overall_exit_code=0
@@ -259,8 +237,61 @@ show_health_report(){
         overall_exit_code=1
     fi
 
+    #-----------------------
+    # Header
+    #------------------------
+    echo
+    echo "========================================================="
+    echo "                     SERVER HEALTH REPORT                "
+    echo "========================================================="
+    echo
+
+    
+    echo "Hostname               :            $hostname"
+    echo "Ip Address             :            $ip_address"
+    echo "Uptime                 :            $uptime"
+    echo
+
+    printf "Cpu usage:              %s%%          [%s]\n" "$cpu_usage" "$cpu_status"
+    printf "Memory usage:           %s%%          [%s]\n" "$memory_usage" "$memory_status"
+    
+    
+    echo
+
+    #--------------
+    # Disk report
+    #--------------
+    check_disk_usage
+    disk_exit_code=$?
+
+    #---------------------------
+    # Determine disk severity
+    #--------------------------
+    if [[ "$disk_exit_code" -eq 2 ]]; then
+        overall_status=CRITICAL
+        overall_exit_code=2
+    elif [[ "$disk_exit_code" -eq 1 && "$overall_exit_code" -lt 2 ]]; then
+        overall_status=WARNING
+        overall_exit_code=1
+    fi
+
+    #-------------------
+    # FINAL REPORT
+    #------------------
+
+    echo
+    echo "-------------------------------"
+    echo "Overall status: $overall_status"
+    echo "-------------------------------"
+
+    return "$overall_exit_code"
     
 }
+
+get_system_info
+
+show_health_report
+exit $?
 
 
 
