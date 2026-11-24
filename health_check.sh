@@ -7,12 +7,12 @@ CONFIG_FILE="$SCRIPT_DIR/config/health.conf"
 #To handle configuration file errors and control exit codes for script termination
 if [[ ! -r "$CONFIG_FILE" ]];then
     printf 'ERROR: Cannot read config file: %s\n'  "$CONFIG_FILE" >&2
-    exit 3
+    exit 2
 fi
 
 if ! source "$CONFIG_FILE"; then
     printf "ERROR; Failed to load config file\n" >&2
-    exit 3 
+    exit 2 
 fi
 
     
@@ -26,15 +26,25 @@ get_system_info(){
     date=$(date)
     current_user=$(whoami)
     uptime='Unknown'
-    cpu_count=$(nproc)
-    load_average=$(awk '{print $1, $2, $3 }' /proc/loadavg)
-    ip_address="Not supported"
-   
+    ip_address="Unavaliable"
+
+    if command -v nproc >>/dev/null 2>&1; then
+        cpu_count=$(nproc)
+    else 
+        cpu_count=1
+    fi
+
+    if [[ r /proc/loadavg ]]; then
+        load_average=$(awk '{print $1, $2, $3 }' /proc/loadavg)
+    else
+        load_average=$(uptime | awk -F'load averages?: ' '{print $2}' || echo "N/A")
+    fi
     
     case "$operating_system" in 
         Linux) 
-            uptime=$(uptime -p 2>/dev/null)
+            uptime=$( uptime -p 2>/dev/null || uptime )
             ip_address=$(hostname -I | awk '{print $1}')
+            [[ -z "$ip_address" ]] && ip_address="127.0.0.0"
             ;;
         Darwin) 
             uptime=$(uptime)
@@ -44,71 +54,45 @@ get_system_info(){
             ip_address=$(ipconfig | grep -m 1 "IPv4 Address" | awk -F: '{print $2}')
             ;;
         *) 
-            uptime="Uptime not supported"
+            uptime="Unsuported OS"
             ;;
     esac
 }
 
 get_cpu_stats(){
-    local user
-    local nice
-    local system
-    local idle
-    local cpu
-    local iowait
-    local irq
-    local softirq
-    local steal
-    local guest
-    local guest_nice
-
-   
-    read -r cpu user nice system idle iowait irq softirq steal guest guest_nice \
-    < <(grep '^cpu ' /proc/stat)
-    echo "$user $nice $system $idle"
+    grep '^cpu ' /proc/stat | awk '{print $2,$3,$4,$5}'
 }
 
 
 get_cpu_usage(){
-    local user1
-    local nice1
-    local system1
-    local idle1
+    if [[ -r /proc/stat ]]; then
+        local user1 nice1 system1 idle1 user2 nice2 system2 idle2
+        read -r user1 nice1 system1 idle1 <<< "$(get_cpu_stats)"
+        sleep 1
+        read -r user2 nice2 system2 idle2 <<< "$(get_cpu_stats)"
+        awk -v u1="$user1" -v n1="$nice1" -v s1="$system1" -v i1="$idle1" \
+            -v u1="$user2" -v n1="$nice2" -v s1="$system2" -v i1="$idle2" '
+            BEGIN {
+                t1 = u1 + n1 + s1 + i1
+                t2 = u2 + n2 + s2 + i2
+                tdiff = t2 -t1
+                if (t2 < = 0) { exit 2 }
+                idiff = i2 - i1
+                busy = tdiff - idiff
+                usage = (busy * 100.0) / tdiff
+                printf "%.1f\n",usage
+            }
+            '
+    elif
+         [[ "$(uname)" == "Darwin" ]]; then
+        top -l 1 | awk '/CPU usage/ {gsub("%","",$3); gsub("%","",$5); printf "%.1f\n", $3 + $5}'
+    else
+        echo "0.0"
 
-    local user2
-    local nice2
-    local system2
-    local idle2
+    fi    
+}   
+  
 
-    local total1
-    local total2
-    local total_difference
-    local idle_difference
-    local busy
-    local usage
-
-    local cpu1
-    local cpu2
-
-    cpu1=$(get_cpu_stats)
-
-    read -r user1 nice1 system1 idle1 <<< "$cpu1"
-
-    sleep 1
-
-    cpu2=$(get_cpu_stats)
-
-    read -r user2 nice2 system2 idle2 <<< "$cpu2"
-
-    total1=$((user1 + nice1 + system1 + idle1))
-    total2=$((user2 + nice2 + system2 + idle2))
-
-    total_difference=$((total2 - total1))
-    idle_difference=$((idle2 - idle1))
-    busy=$((total_difference - idle_difference))
-    usage=$((busy * 100 / total_difference))
-    echo "$usage"
-}
 
 
 
@@ -128,18 +112,29 @@ get_cpu_status(){
 
 
 get_memory_usage(){
-    local total_memory
-    local available_memory
-    local used_memory
-    local usage
+    if [[ -r /proc/meminfo ]] then
+        awk '/^MemTotal:/ { total = $2 }
+            /^MemAvailable:/ { avail = $2 }
+            END {
+                if ( total <= 0 ) { exit 2}
+                printf "%.1f\n", ((total - avail) * 100.0 ) / total 
+            }'/proc/meminfo
 
-    total_memory=$( awk '/^MemTotal:/ {print $2}' /proc/meminfo )
-    available_memory=$( awk '/^MemAvailable:/ {print $2}' /proc/meminfo )
-    used_memory=$(( total_memory - available_memory ))
+   elif [[ "$(uname)" == "Darwin" ]]; then
+        vm_stat | awk '
+            /Pages active/ { active = $3 }
+            /Pages wired/ { wired = $4 }
+            /Pages free/ { free = $3 }
+            END {
+                gsub(/\./,"",active); gsub(/\./,"",wired); gsub(/\./,"",free)
+                total = active + wired + free
+                if (total <= 0) { exit 2 }
+                printf "%.1f\n", ((active + wired) * 100.0) / total
+            }'
+    else
+        echo "0.0"
+    fi
 
-    usage=$((used_memory * 100 / total_memory ))
-    
-    echo "$usage"  
 }
 
 get_memory_status(){
@@ -200,6 +195,26 @@ check_disk_usage(){
     return "$disk_exit_code"
 }
 
+check_services(){
+    local service
+    local service_status
+    local service_exit_code=0
+
+    for service in "${SERVICES[@]}";do
+        if  systemctl is-active --quiet "$service" ; then
+            service_status='RUNNING'
+            printf "%s %s [OK]\n" "$service" "$service_status"
+        else
+            service_status='STOPPED'
+            printf "%s %s [CRITICAL]\n" "$service" "$service_status"
+            service_exit_code=2
+        fi
+    done
+
+    return "$service_exit_code"
+}
+
+
 
 show_health_report(){
     local cpu_usage
@@ -209,8 +224,9 @@ show_health_report(){
     local memory_usage
 
     local disk_exit_code
+    local service_exit_code
 
-    local overall_status=HEALTHLY
+    local overall_status=HEALTHY
     local overall_exit_code=0
 
     #------------------
@@ -232,7 +248,7 @@ show_health_report(){
     if [[ "$cpu_status" == "CRITICAL"  || "$memory_status" == "CRITICAL" ]];then
         overall_status=CRITICAL
         overall_exit_code=2
-    elif [[ "$cpu_status" == "WARNING"  || "$memory_status" == "WARNING"  && overall_exit_code -lt 2 ]];then
+    elif [[ "$cpu_status" == "WARNING"  || "$memory_status" == "WARNING"  ]];then
         overall_status=WARNING
         overall_exit_code=1
     fi
@@ -247,9 +263,13 @@ show_health_report(){
     echo
 
     
-    echo "Hostname               :            $hostname"
-    echo "Ip Address             :            $ip_address"
-    echo "Uptime                 :            $uptime"
+    printf "Hostname          : %s\n" "$hostname"
+    printf "Ip Address        : %s\n"  "$ip_address"
+    printf "Uptime            : %s\n"  "$uptime"
+    printf "Operating System  : %s\n" "$operating_system"
+    printf "Kernel            : %s\n" "$kernel"
+    printf "CPU Count         : %s\n" "$cpu_count"
+    printf "Load Average      : %s\n" "$load_average"
     echo
 
     printf "Cpu usage:              %s%%          [%s]\n" "$cpu_usage" "$cpu_status"
@@ -261,8 +281,12 @@ show_health_report(){
     #--------------
     # Disk report
     #--------------
-    check_disk_usage
-    disk_exit_code=$?
+    #handling exit code of 1 and 2, to prevent script termination because set -e
+    if check_disk_usage ; then
+        disk_exit_code=0
+    else
+        disk_exit_code=$?
+    fi
 
     #---------------------------
     # Determine disk severity
@@ -273,6 +297,20 @@ show_health_report(){
     elif [[ "$disk_exit_code" -eq 1 && "$overall_exit_code" -lt 2 ]]; then
         overall_status=WARNING
         overall_exit_code=1
+    fi
+    
+     #---------------------------
+    # SERVICE REPORT
+    #--------------------------
+
+    if check_services; then
+        service_exit_code=0
+    else
+        service_exit_code=$?
+        if [[ "$service_exit_code" -eq 2 ]]; then
+            overall_status=CRITICAL
+            overall_exit_code=2
+        fi
     fi
 
     #-------------------
@@ -289,7 +327,6 @@ show_health_report(){
 }
 
 get_system_info
-
 show_health_report
 exit $?
 
