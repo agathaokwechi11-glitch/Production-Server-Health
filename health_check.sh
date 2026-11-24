@@ -2,21 +2,67 @@
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")"  && pwd )"
-CONFIG_FILE="$SCRIPT_DIR/config/health.conf"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd  )"
+CONFIG_FILE="${CONFIG_FILE :- $PROJECT_ROOT/config/health.conf}"
 
-#To handle configuration file errors and control exit codes for script termination
+#Configuration loading and validaition
+
+#To check if configuration file is readable
 if [[ ! -r "$CONFIG_FILE" ]];then
-    printf 'ERROR: Cannot read config file: %s\n'  "$CONFIG_FILE" >&2
+    printf '[ERROR] Cannot read config file: %s\n'  "$CONFIG_FILE" >&2
     exit 2
 fi
-
+#To check if configuration file can be loaded here
 if ! source "$CONFIG_FILE"; then
-    printf "ERROR; Failed to load config file\n" >&2
+    printf "[ERROR] Failed to load config file\n" >&2
     exit 2 
 fi
 
-    
+validate_config() {
+    local required_vars=(CPU_WARNING CPU_CRITICAL MEMORY_WARNING MEMORY_CRITICAL DISK_WARNING DISK_CRITICAL)
+    for var in "${required_vars[@]}"; do
+        if [[ -z "${!var:-}" ]] || ! [[ "${!var}" =~ ^[0-9]+$ ]]; then
+            printf "[ERROR] Invalid or missing numeric config vaiable: %s\n" "$var" >&2
+            exit 2
+        fi
 
+        if (( CPU_WARNING >= CPU_CRITICAL || MEMORY_WARNING >= MEMORY_CRITICAL || DISK_WARNING >= DISK_CRITICAL  ));then
+            printf "[ERROR] Warning Thresholds must be less than critical thresholds.\n" >&2
+            exit 2
+        fi
+    done
+
+}
+    
+validate_config
+
+LOG_PATH="$PROJECT_ROOT/${LOG_DIR:-logs}"
+REPORT_PATH="$PROJECT_ROOT/${REPORT_DIR:-reports}"
+mkdir -p "$LOG_PATH" "$REPORT_PATH"
+ACTIVE_LOG="$LOG_PATH/${LOG_FILE:-health_monitor.log}"
+
+#LOGGING
+log_msg(){
+    local level="$1"
+    local message="$2"
+    local timestamp
+    timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    printf "[%s] [%s] %s\n" "$timestamp" "$level" "message" >> "$ACTIVE_LOG"
+
+}
+
+rotate_logs(){
+    local max_lines="${MAX_LOG_LINES:-1000}"
+    if [[ -f "$ACTIVE_LOG" ]]; then
+        local line_count="$(wc -l < $ACTIVE_LOG)"
+        if (( line_count > max_lines)); then
+            local archive="$LOG_PATH/health_monitor_$(date '+%Y%m%d_%H%M%S').log"
+            mv "$ACTIVE_LOG" "$archive"
+            touch "$ACTIVE_LOG"
+            log_msg "INFO" "Rotated log files to $(basename "$archive")"
+        fi
+    fi
+}
 
 get_system_info(){
 
