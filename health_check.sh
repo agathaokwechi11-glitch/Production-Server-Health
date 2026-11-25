@@ -89,14 +89,12 @@ get_system_info(){
         Linux) 
             uptime=$( uptime -p 2>/dev/null || uptime )
             ip_address=$(hostname -I | awk '{print $1}')
-            [[ -z "$ip_address" ]] && ip_address="127.0.0.0"
+            if [[ -z "$ip_address" ]]; then
+                 ip_address="127.0.0.1"
+            fi
             ;;
         Darwin) 
             uptime=$(uptime)
-            ;;
-        MING*|MSYS*|CYGWIN*) 
-            uptime="Environment: Windows / Bash"
-            ip_address=$(ipconfig | grep -m 1 "IPv4 Address" | awk -F: '{print $2}')
             ;;
         *) 
             uptime="Unsuported OS"
@@ -147,7 +145,7 @@ get_memory_usage(){
             END {
                 if ( total <= 0 ) { exit 2}
                 printf "%.1f\n", ((total - avail) * 100.0 ) / total 
-            }'/proc/meminfo
+            }' /proc/meminfo
 
    elif [[ "$(uname)" == "Darwin" ]]; then
         vm_stat | awk '
@@ -196,7 +194,7 @@ check_disk_usage(){
         log_msg "WARN" "Disk warning on $filesystem (${usage}%)"
     fi
 
-    printf "%-40s %5s%% [%s]\n" "$filesystem" "$usage" "$disk_status"
+    printf "%-20s %5s%% [%s]\n" "$filesystem" "$usage" "$disk_status"
     done  < <( 
         #To get the filesystem and its usage without the percentage
         df -P -x tmpfs -x  devtmpfs -x squashfs | 
