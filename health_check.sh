@@ -36,8 +36,8 @@ validate_config() {
     
 validate_config
 
-LOG_PATH="$PROJECT_ROOT/${LOG_DIR:-logs}"
-REPORT_PATH="$PROJECT_ROOT/${REPORT_DIR:-reports}"
+LOG_PATH="$SCRIPT_DIR/${LOG_DIR:-logs}"
+REPORT_PATH="$SCRIPT_DIR/${REPORT_DIR:-reports}"
 mkdir -p "$LOG_PATH" "$REPORT_PATH"
 ACTIVE_LOG="$LOG_PATH/${LOG_FILE:-health_monitor.log}"
 
