@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")"  && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd  )"
-CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/Production_Server_Health/config/health.conf}"
+CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/config/health.conf}"
 
 #Configuration loading and validaition
 
@@ -36,8 +36,8 @@ validate_config() {
     
 validate_config
 
-LOG_PATH="$SCRIPT_DIR/${LOG_DIR:-logs}"
-REPORT_PATH="$SCRIPT_DIR/${REPORT_DIR:-reports}"
+LOG_PATH="$PROJECT_ROOT/${LOG_DIR:-logs}"
+REPORT_PATH="$PROJECT_ROOT/${REPORT_DIR:-reports}"
 mkdir -p "$LOG_PATH" "$REPORT_PATH"
 ACTIVE_LOG="$LOG_PATH/${LOG_FILE:-health_monitor.log}"
 

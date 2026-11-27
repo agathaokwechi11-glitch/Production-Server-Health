@@ -2,8 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd )"
-CONFIG_FILE="${CONFIG_FILE:-$SCRIPT_DIR/config/health.conf}" #CHECK
-HEALTH_SCRIPT="${HEALTH_SCRIPT:-$SCRIPT_DIR/health_check.sh}"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd  )"
+CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/config/health.conf}"
+HEALTH_SCRIPT="$SCRIPT_DIR/health_check.sh"
 
 
 if [[ ! -x "$HEALTH_SCRIPT" ]]; then
@@ -12,9 +13,10 @@ fi
 
 if ! source "$HEALTH_SCRIPT"; then
     printf "[ERROR]: Failed to load health_check script file\n" >&2
+    exit 2
 fi
 
-REPORT_DIR_PATH="$SCRIPT_DIR/${REPORT_DIR:-reports}"
+REPORT_DIR_PATH="$PROJECT_ROOT/${REPORT_DIR:-reports}"
 mkdir -p "$REPORT_DIR_PATH"
 
 TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
